@@ -9,6 +9,12 @@ app.use(express.json());
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
+// Обработчик для корня сайта (чтобы Render и UptimeRobot не ругались на 502)
+app.get('/', (req, res) => {
+  res.send('MimimiTattooBot is running!');
+});
+
+// Пример API для отправки сообщений с сайта (если нужно)
 app.post('/api/message', async (req, res) => {
   const { message } = req.body;
 
@@ -29,5 +35,5 @@ app.post('/api/message', async (req, res) => {
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`Server started on port ${PORT}`));
 
-// <<< ДОБАВЬ ЭТУ СТРОКУ >>>
+// Запуск Telegram-бота
 require('./bot');

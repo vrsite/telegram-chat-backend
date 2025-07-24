@@ -131,6 +131,21 @@ function resetUser(chatId) {
   users[chatId] = { lang: users[chatId]?.lang || 'ru', step: 'menu' };
 }
 
+// === Глобальная обработка ошибок ===
+bot.on('polling_error', (error) => {
+  console.error('Polling error:', error);
+});
+bot.on('webhook_error', (error) => {
+  console.error('Webhook error:', error);
+});
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+});
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection:', reason);
+});
+// === Конец блока обработки ошибок ===
+
 bot.onText(/\/start|\/menu/, (msg) => {
   const chatId = msg.chat.id;
   users[chatId] = { lang: users[chatId]?.lang || 'ru', step: 'menu' };
@@ -143,82 +158,91 @@ bot.on('callback_query', async (query) => {
   users[chatId] = users[chatId] || { lang: 'ru', step: 'menu' };
   const lang = users[chatId].lang;
 
-  // Смена языка
-  if (data === 'lang') {
-    users[chatId].step = 'lang';
-    return bot.editMessageText(
-      lang === 'ru'
-        ? 'Пожалуйста, выберите язык:'
-        : 'Please choose your language:',
-      { chat_id: chatId, message_id: query.message.message_id, ...langMenu() }
-    );
-  }
-  if (data.startsWith('setlang_')) {
-    const newLang = data.split('_')[1];
-    users[chatId].lang = newLang;
-    users[chatId].step = 'menu';
-    return bot.editMessageText(getGreeting(newLang), { chat_id: chatId, message_id: query.message.message_id, ...mainMenu(newLang) });
-  }
-
-  // Главное меню
-  if (data === 'menu') {
-    resetUser(chatId);
-    return bot.editMessageText(getGreeting(lang), { chat_id: chatId, message_id: query.message.message_id, ...mainMenu(lang) });
-  }
-
-  // Запись на услугу
-  if (data === 'book') {
-    users[chatId].step = 'service';
-    return bot.editMessageText(
-      lang === 'ru' ? 'Выберите услугу:' : 'Choose a service:',
-      { chat_id: chatId, message_id: query.message.message_id, ...servicesMenu(lang) }
-    );
-  }
-  if (data.startsWith('service_')) {
-    const idx = Number(data.split('_')[1]);
-    users[chatId].service = SERVICES[lang][idx];
-    users[chatId].step = 'name';
-    bot.deleteMessage(chatId, query.message.message_id);
-    return bot.sendMessage(chatId, lang === 'ru' ? 'Как вас зовут?' : 'What is your name?');
-  }
-
-  // FAQ
-  if (data === 'faq') {
-    users[chatId].step = 'faq';
-    return bot.editMessageText(lang === 'ru' ? 'Выберите вопрос:' : 'Choose a question:', { chat_id: chatId, message_id: query.message.message_id, ...faqMenu(lang) });
-  }
-  if (data.startsWith('faq_')) {
-    const idx = Number(data.split('_')[1]);
-    return bot.answerCallbackQuery(query.id, { text: FAQ[lang][idx].a, show_alert: true });
-  }
-
-  // Контакты
-  if (data === 'contacts') {
-    return bot.editMessageText(CONTACTS[lang], { chat_id: chatId, message_id: query.message.message_id, ...mainMenu(lang) });
-  }
-
-  // Город
-  if (data === 'service') {
-    users[chatId].step = 'service';
-    return bot.editMessageText(
-      lang === 'ru' ? 'Выберите услугу:' : 'Choose a service:',
-      { chat_id: chatId, message_id: query.message.message_id, ...servicesMenu(lang) }
-    );
-  }
-  if (data.startsWith('city_')) {
-    const idx = Number(data.split('_')[1]);
-    if (CITIES[lang][idx] === (lang === 'ru' ? 'Другое' : 'Other')) {
-      users[chatId].step = 'city_other';
-      bot.deleteMessage(chatId, query.message.message_id);
-      return bot.sendMessage(chatId, lang === 'ru' ? 'Пожалуйста, напишите, в каком городе вы хотите записаться:' : 'Please type the city where you want to book:');
-    } else {
-      users[chatId].city = CITIES[lang][idx];
-      users[chatId].step = 'date';
-      bot.deleteMessage(chatId, query.message.message_id);
-      return bot.sendMessage(chatId, lang === 'ru'
-        ? 'Когда вам удобно прийти? (Напишите дату и время или пожелания)'
-        : 'When would you like to come? (Please write date and time or your wishes)');
+  try {
+    // Смена языка
+    if (data === 'lang') {
+      users[chatId].step = 'lang';
+      return await bot.editMessageText(
+        lang === 'ru'
+          ? 'Пожалуйста, выберите язык:'
+          : 'Please choose your language:',
+        { chat_id: chatId, message_id: query.message.message_id, ...langMenu() }
+      );
     }
+    if (data.startsWith('setlang_')) {
+      const newLang = data.split('_')[1];
+      users[chatId].lang = newLang;
+      users[chatId].step = 'menu';
+      return await bot.editMessageText(getGreeting(newLang), { chat_id: chatId, message_id: query.message.message_id, ...mainMenu(newLang) });
+    }
+
+    // Главное меню
+    if (data === 'menu') {
+      resetUser(chatId);
+      return await bot.editMessageText(getGreeting(lang), { chat_id: chatId, message_id: query.message.message_id, ...mainMenu(lang) });
+    }
+
+    // Запись на услугу
+    if (data === 'book') {
+      users[chatId].step = 'service';
+      return await bot.editMessageText(
+        lang === 'ru' ? 'Выберите услугу:' : 'Choose a service:',
+        { chat_id: chatId, message_id: query.message.message_id, ...servicesMenu(lang) }
+      );
+    }
+    if (data.startsWith('service_')) {
+      const idx = Number(data.split('_')[1]);
+      users[chatId].service = SERVICES[lang][idx];
+      users[chatId].step = 'name';
+      await bot.deleteMessage(chatId, query.message.message_id);
+      return await bot.sendMessage(chatId, lang === 'ru' ? 'Как вас зовут?' : 'What is your name?');
+    }
+
+    // FAQ
+    if (data === 'faq') {
+      users[chatId].step = 'faq';
+      return await bot.editMessageText(lang === 'ru' ? 'Выберите вопрос:' : 'Choose a question:', { chat_id: chatId, message_id: query.message.message_id, ...faqMenu(lang) });
+    }
+    if (data.startsWith('faq_')) {
+      const idx = Number(data.split('_')[1]);
+      try {
+        await bot.answerCallbackQuery(query.id, { text: FAQ[lang][idx].a, show_alert: true });
+      } catch (err) {
+        console.error('answerCallbackQuery error:', err);
+      }
+      return;
+    }
+
+    // Контакты
+    if (data === 'contacts') {
+      return await bot.editMessageText(CONTACTS[lang], { chat_id: chatId, message_id: query.message.message_id, ...mainMenu(lang) });
+    }
+
+    // Город
+    if (data === 'service') {
+      users[chatId].step = 'service';
+      return await bot.editMessageText(
+        lang === 'ru' ? 'Выберите услугу:' : 'Choose a service:',
+        { chat_id: chatId, message_id: query.message.message_id, ...servicesMenu(lang) }
+      );
+    }
+    if (data.startsWith('city_')) {
+      const idx = Number(data.split('_')[1]);
+      if (CITIES[lang][idx] === (lang === 'ru' ? 'Другое' : 'Other')) {
+        users[chatId].step = 'city_other';
+        await bot.deleteMessage(chatId, query.message.message_id);
+        return await bot.sendMessage(chatId, lang === 'ru' ? 'Пожалуйста, напишите, в каком городе вы хотите записаться:' : 'Please type the city where you want to book:');
+      } else {
+        users[chatId].city = CITIES[lang][idx];
+        users[chatId].step = 'date';
+        await bot.deleteMessage(chatId, query.message.message_id);
+        return await bot.sendMessage(chatId, lang === 'ru'
+          ? 'Когда вам удобно прийти? (Напишите дату и время или пожелания)'
+          : 'When would you like to come? (Please write date and time or your wishes)');
+      }
+    }
+  } catch (err) {
+    console.error('callback_query error:', err);
   }
 });
 
@@ -228,54 +252,62 @@ bot.on('message', async (msg) => {
   if (!users[chatId]) users[chatId] = { lang: 'ru', step: 'menu' };
   const lang = users[chatId].lang;
 
-  // /start и /menu уже обработаны выше
+  try {
+    // /start и /menu уже обработаны выше
 
-  // Имя
-  if (users[chatId].step === 'name') {
-    users[chatId].name = text;
-    users[chatId].step = 'phone';
-    return bot.sendMessage(chatId, lang === 'ru' ? 'Ваш номер телефона?' : 'Your phone number?');
-  }
+    // Имя
+    if (users[chatId].step === 'name') {
+      users[chatId].name = text;
+      users[chatId].step = 'phone';
+      return await bot.sendMessage(chatId, lang === 'ru' ? 'Ваш номер телефона?' : 'Your phone number?');
+    }
 
-  // Телефон
-  if (users[chatId].step === 'phone') {
-    users[chatId].phone = text;
-    users[chatId].step = 'city';
-    return bot.sendMessage(chatId, lang === 'ru' ? 'Выберите город:' : 'Choose a city:', citiesMenu(lang));
-  }
+    // Телефон
+    if (users[chatId].step === 'phone') {
+      users[chatId].phone = text;
+      users[chatId].step = 'city';
+      return await bot.sendMessage(chatId, lang === 'ru' ? 'Выберите город:' : 'Choose a city:', citiesMenu(lang));
+    }
 
-  // Город (ручной ввод)
-  if (users[chatId].step === 'city_other') {
-    users[chatId].city = text;
-    users[chatId].step = 'date';
-    return bot.sendMessage(chatId, lang === 'ru'
-      ? 'Когда вам удобно прийти? (Напишите дату и время или пожелания)'
-      : 'When would you like to come? (Please write date and time or your wishes)');
-  }
+    // Город (ручной ввод)
+    if (users[chatId].step === 'city_other') {
+      users[chatId].city = text;
+      users[chatId].step = 'date';
+      return await bot.sendMessage(chatId, lang === 'ru'
+        ? 'Когда вам удобно прийти? (Напишите дату и время или пожелания)'
+        : 'When would you like to come? (Please write date and time or your wishes)');
+    }
 
-  // Дата/время
-  if (users[chatId].step === 'date') {
-    users[chatId].date = text;
-    users[chatId].step = 'menu';
+    // Дата/время
+    if (users[chatId].step === 'date') {
+      users[chatId].date = text;
+      users[chatId].step = 'menu';
 
-    // Уведомление Kris
-    const notify = 
-      (lang === 'ru' ? '✨ Новая заявка!\n' : '✨ New request!\n') +
-      (lang === 'ru' ? 'Услуга' : 'Service') + `: ${users[chatId].service}\n` +
-      (lang === 'ru' ? 'Имя' : 'Name') + `: ${users[chatId].name}\n` +
-      (lang === 'ru' ? 'Телефон' : 'Phone') + `: ${users[chatId].phone}\n` +
-      (lang === 'ru' ? 'Город' : 'City') + `: ${users[chatId].city}\n` +
-      (lang === 'ru' ? 'Дата/время' : 'Date/Time') + `: ${users[chatId].date}`;
+      // Уведомление Kris
+      const notify =
+        (lang === 'ru' ? '✨ Новая заявка!\n' : '✨ New request!\n') +
+        (lang === 'ru' ? 'Услуга' : 'Service') + `: ${users[chatId].service}\n` +
+        (lang === 'ru' ? 'Имя' : 'Name') + `: ${users[chatId].name}\n` +
+        (lang === 'ru' ? 'Телефон' : 'Phone') + `: ${users[chatId].phone}\n` +
+        (lang === 'ru' ? 'Город' : 'City') + `: ${users[chatId].city}\n` +
+        (lang === 'ru' ? 'Дата/время' : 'Date/Time') + `: ${users[chatId].date}`;
 
-    bot.sendMessage(adminChatId, notify);
+      try {
+        await bot.sendMessage(adminChatId, notify);
+      } catch (err) {
+        console.error('sendMessage to admin error:', err);
+      }
 
-    // Ответ пользователю
-    return bot.sendMessage(chatId,
-      (lang === 'ru'
-        ? 'Спасибо за заявку! Kris свяжется с вами для уточнения деталей. Важно: для подтверждения записи потребуется предоплата.\n\n'
-        : 'Thank you for your request! Kris will contact you to confirm the details. Note: a prepayment is required to confirm your booking.\n\n'
-      ) + getFarewell(lang),
-      mainMenu(lang)
-    );
+      // Ответ пользователю
+      return await bot.sendMessage(chatId,
+        (lang === 'ru'
+          ? 'Спасибо за заявку! Kris свяжется с вами для уточнения деталей. Важно: для подтверждения записи потребуется предоплата.\n\n'
+          : 'Thank you for your request! Kris will contact you to confirm the details. Note: a prepayment is required to confirm your booking.\n\n'
+        ) + getFarewell(lang),
+        mainMenu(lang)
+      );
+    }
+  } catch (err) {
+    console.error('message handler error:', err);
   }
 });

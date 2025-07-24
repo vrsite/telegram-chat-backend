@@ -9,12 +9,12 @@ app.use(express.json());
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
-// Обработчик для корня сайта (чтобы Render и UptimeRobot не ругались на 502)
+// Корневой маршрут для Render/UptimeRobot
 app.get('/', (req, res) => {
   res.send('MimimiTattooBot is running!');
 });
 
-// Пример API для отправки сообщений с сайта (если нужно)
+// API для отправки сообщений с сайта (если нужно)
 app.post('/api/message', async (req, res) => {
   const { message } = req.body;
 

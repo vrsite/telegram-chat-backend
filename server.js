@@ -1,5 +1,5 @@
 const express = require('express');
-const fetch = require('node-fetch');
+const axios = require('axios');
 const cors = require('cors');
 
 const app = express();
@@ -12,19 +12,17 @@ const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 app.post('/api/message', async (req, res) => {
   const { message } = req.body;
 
-  const tgRes = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: TELEGRAM_CHAT_ID,
-      text: message,
-    }),
-  });
-
-  if (tgRes.ok) {
+  try {
+    await axios.post(
+      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+      {
+        chat_id: TELEGRAM_CHAT_ID,
+        text: message,
+      }
+    );
     res.json({ success: true });
-  } else {
-    res.status(500).json({ success: false });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 

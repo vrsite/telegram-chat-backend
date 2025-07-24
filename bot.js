@@ -25,7 +25,7 @@ const CITIES = {
 const FAQ = {
   ru: [
     { q: 'Сколько стоит татуировка/пирсинг/перманент?', a: 'Стоимость зависит от объёма, стиля и сложности работы. Точную цену Kris сможет назвать после обсуждения вашей идеи и деталей.' },
-    { q: 'Где находится студия?', a: 'Kris работает в Ирландии, чаще всего в Дублине, но иногда бывает и в других городах. Точное место и дату можно уточнить при записи — просто напишите, где вы находитесь, и Kris подберёт удобный вариант!' },
+    { q: 'Где находится студия?', a: 'Kris работает в Ирландии, чаще всего в Дублине. Точное место и дату уточняйте при записи.' },
     { q: 'Как подготовиться к процедуре?', a: 'Перед процедурой важно хорошо выспаться, не употреблять алкоголь и кофе, хорошо поесть. Подробности Kris расскажет лично.' },
     { q: 'Какой уход после процедуры?', a: 'После процедуры вы получите подробные инструкции по уходу и специальную заживляющую плёнку.' },
     { q: 'Как связаться с Kris?', a: 'Связаться с Kris можно через Telegram, WhatsApp, Instagram или по телефону. Все контакты доступны в разделе "Контакты".' },
@@ -35,7 +35,7 @@ const FAQ = {
   ],
   en: [
     { q: 'How much does a tattoo/piercing/permanent makeup cost?', a: 'The price depends on the size, style, and complexity. Kris will give you an exact quote after discussing your idea and details.' },
-    { q: 'Where is the studio located?', a: 'Kris works in Ireland, most often in Dublin, but sometimes visits other cities. The exact location and date can be clarified when booking — just let us know where you are, and Kris will find the best option for you!' },
+    { q: 'Where is the studio located?', a: 'Kris works in Ireland, mostly in Dublin. Exact place and date are clarified when booking.' },
     { q: 'How to prepare for the procedure?', a: 'Before the procedure, get a good night’s sleep, avoid alcohol and coffee, and have a good meal. Kris will give you all the details personally.' },
     { q: 'How to care after the procedure?', a: 'After the procedure, you will receive detailed aftercare instructions and a special healing film.' },
     { q: 'How to contact Kris?', a: 'You can contact Kris via Telegram, WhatsApp, Instagram, or phone. All contacts are available in the "Contacts" section.' },
@@ -205,8 +205,15 @@ bot.on('callback_query', async (query) => {
     }
     if (data.startsWith('faq_')) {
       const idx = Number(data.split('_')[1]);
+      const answer = FAQ[lang][idx].a;
       try {
-        await bot.answerCallbackQuery(query.id, { text: FAQ[lang][idx].a, show_alert: true });
+        // Если ответ короткий — показываем alert, если длинный — отправляем отдельным сообщением
+        if (answer.length < 180) {
+          await bot.answerCallbackQuery(query.id, { text: answer, show_alert: true });
+        } else {
+          await bot.answerCallbackQuery(query.id); // просто закрыть alert
+          await bot.sendMessage(chatId, answer);
+        }
       } catch (err) {
         console.error('answerCallbackQuery error:', err);
       }

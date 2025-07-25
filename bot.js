@@ -5,9 +5,6 @@ const axios = require('axios');
 const token = process.env.TELEGRAM_BOT_TOKEN;
 const adminChatId = process.env.TELEGRAM_CHAT_ID;
 
-// ВАЖНО: УДАЛЕНО { polling: true }
-// Бот будет инициализирован, но не будет сам опрашивать Telegram.
-// Вместо этого server.js будет передавать ему обновления через webhooks.
 const bot = new TelegramBot(token);
 
 const users = {}; // Состояния пользователей, теперь ключом может быть Telegram chatId или socket.id
@@ -218,29 +215,32 @@ function resetUser(chatId) {
 // Она принимает объект 'updateData' (либо от Telegram, либо от веб-виджета)
 // и ioInstance (только если источник 'web' и нужно общаться по Socket.IO)
 async function processMessage(updateData, ioInstance) {
-  let chatId, text, data, source, queryId, messageId, message;
+  let chatId, text, data, source, queryId, message;
 
   // Определяем источник и извлекаем данные
-  if (updateData.source === 'web') { // Сообщение с веб-виджета
-    source = 'web';
+  source = updateData.source;
+
+  if (source === 'web') { // Сообщение с веб-виджета
     chatId = updateData.chatId; // socket.id
     text = updateData.message; // В веб-сообщении текст приходит как 'message'
     data = updateData.isCallback ? updateData.message : null; // isCallback: true означает, что message - это callback_data
     message = { chat: { id: chatId }, message_id: 'web_msg_' + Date.now() }; // Создаем mock-объект сообщения
-  } else { // Сообщение от Telegram (webhook update)
-    source = 'telegram';
+  } else { // source === 'telegram'
+    // updateData здесь - это полный raw updateBody от Telegram
     if (updateData.message) {
       message = updateData.message;
       chatId = message.chat.id;
       text = message.text;
+      data = null; // Текстовые сообщения не имеют callback_data
+      queryId = null;
     } else if (updateData.callback_query) {
-      message = updateData.callback_query.message;
+      message = updateData.callback_query.message; // Сообщение, к которому привязан callback
       chatId = message.chat.id;
-      data = updateData.callback_query.data;
-      queryId = updateData.callback_query.id; // Для answerCallbackQuery
+      data = updateData.callback_query.data; // callback_data
+      queryId = updateData.callback_query.id; // ID для answerCallbackQuery
       text = null; // Callback-запросы не имеют текстового сообщения
     } else {
-        console.warn('Unknown update type from Telegram:', updateData);
+        console.warn('Unknown update type from Telegram inside processMessage (after initial check):', updateData);
         return;
     }
   }
@@ -456,17 +456,9 @@ async function processMessage(updateData, ioInstance) {
 
 // ЭКСПОРТИРУЕМ ФУНКЦИИ
 module.exports = {
-  handleTelegramUpdate: async (updateBody, ioInstance) => { // Принимаем ioInstance
-    let updateData;
-    if (updateBody.message) {
-        updateData = { ...updateBody.message, source: 'telegram' };
-    } else if (updateBody.callback_query) {
-        updateData = { ...updateBody.callback_query, message: updateBody.callback_query.message, data: updateBody.callback_query.data, queryId: updateBody.callback_query.id, source: 'telegram' };
-    } else {
-        console.warn('Unknown update type from Telegram:', updateBody);
-        return;
-    }
-    await processMessage(updateData, ioInstance); // Передаем ioInstance
+  handleTelegramUpdate: async (updateBody, ioInstance) => {
+    // Просто передаем raw updateBody и указываем source
+    await processMessage({ ...updateBody, source: 'telegram' }, ioInstance);
   },
   processMessage: processMessage
 };

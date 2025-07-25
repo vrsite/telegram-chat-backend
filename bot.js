@@ -5,9 +5,12 @@ const axios = require('axios');
 const token = process.env.TELEGRAM_BOT_TOKEN;
 const adminChatId = process.env.TELEGRAM_CHAT_ID;
 
+// ВАЖНО: УДАЛЕНО { polling: true }
+// Бот будет инициализирован, но не будет сам опрашивать Telegram.
+// Вместо этого server.js будет передавать ему обновления через webhooks.
 const bot = new TelegramBot(token);
 
-const users = {};
+const users = {}; // Состояния пользователей, теперь ключом может быть Telegram chatId или socket.id
 
 const LANGS = [
   { code: 'ru', label: 'Русский' },
@@ -66,17 +69,21 @@ Email: nika889list.ru@gmail.com
 Phones: +380 96 515 78 90 (UA), +353 87 716 79 33 (IRL)`
 };
 
+// Отправка сообщения обратно клиенту (Telegram или Web)
 async function sendMessageToClient(chatId, text, options = {}, source, ioInstance) {
+  // Добавим небольшую задержку для веб-сообщений, чтобы избежать спама
   if (source === 'web') {
-    if (ioInstance) {
+    await new Promise(resolve => setTimeout(resolve, 100)); // 100ms задержка
+    if (ioInstance) { // Убедимся, что ioInstance передан
       ioInstance.to(chatId).emit('botMessage', {
         text: text,
         buttons: options.reply_markup ? options.reply_markup.inline_keyboard : []
       });
     } else {
-      console.error('Socket.IO instance not provided for web message'); // Эта ошибка должна исчезнуть
+      console.error('Socket.IO instance not provided for web message - this should not happen now!');
     }
-  } else {
+  } else { // source === 'telegram'
+    // Отправляем сообщение в Telegram
     try {
       await bot.sendMessage(chatId, text, options);
     } catch (error) {
@@ -85,18 +92,20 @@ async function sendMessageToClient(chatId, text, options = {}, source, ioInstanc
   }
 }
 
+// Отправка отредактированного сообщения обратно клиенту (Telegram или Web)
 async function editMessageToClient(chatId, messageId, text, options = {}, source, ioInstance) {
   if (source === 'web') {
-    if (ioInstance) {
-      ioInstance.to(chatId).emit('botMessage', {
+    await new Promise(resolve => setTimeout(resolve, 100)); // 100ms задержка
+    if (ioInstance) { // Убедимся, что ioInstance передан
+      ioInstance.to(chatId).emit('botMessage', { // Для веб-виджета, отправляем новое сообщение вместо редактирования
         text: text,
         buttons: options.reply_markup ? options.reply_markup.inline_keyboard : []
       });
-      ioInstance.to(chatId).emit('clearLastButtons'); // Команда фронтенду для очистки кнопок
+      ioInstance.to(chatId).emit('clearLastButtons'); // Команда фронтенду для очистки предыдущих кнопок
     } else {
-      console.error('Socket.IO instance not provided for web message edit'); // Эта ошибка должна исчезнуть
+      console.error('Socket.IO instance not provided for web message edit - this should not happen now!');
     }
-  } else {
+  } else { // source === 'telegram'
     try {
       await bot.editMessageText(text, { chat_id: chatId, message_id: messageId, ...options });
     } catch (error) {
@@ -105,12 +114,13 @@ async function editMessageToClient(chatId, messageId, text, options = {}, source
   }
 }
 
+// Отправка alert-уведомления клиенту (только Telegram, для web - эмулируем)
 async function answerCallbackQueryClient(queryId, options = {}, source, ioInstance) {
   if (source === 'web') {
-    if (options.show_alert && ioInstance && options.chat_id) {
+    if (options.show_alert && ioInstance && options.text) { // Убедимся, что text в options есть
         ioInstance.to(options.chat_id).emit('showAlert', { text: options.text });
     }
-  } else {
+  } else { // source === 'telegram'
     try {
       await bot.answerCallbackQuery(queryId, options);
     } catch (error) {
@@ -119,12 +129,13 @@ async function answerCallbackQueryClient(queryId, options = {}, source, ioInstan
   }
 }
 
+// Удаление сообщения (только Telegram, для web - эмулируем)
 async function deleteMessageClient(chatId, messageId, source, ioInstance) {
   if (source === 'web') {
     if (ioInstance) {
       ioInstance.to(chatId).emit('clearLastButtons'); // Команда фронтенду для очистки кнопок
     }
-  } else {
+  } else { // source === 'telegram'
     try {
       await bot.deleteMessage(chatId, messageId);
     } catch (error) {
@@ -133,30 +144,90 @@ async function deleteMessageClient(chatId, messageId, source, ioInstance) {
   }
 }
 
-function mainMenu(lang) { /* ... (без изменений) ... */ return {reply_markup:{inline_keyboard:[[{text:lang==='ru'?'📝 Записаться к Kris':'📝 Book an appointment',callback_data:'book'}],[{text:lang==='ru'?'❓ Частые вопросы':'❓ FAQ',callback_data:'faq'}],[{text:lang==='ru'?'📞 Контакты':'📞 Contacts',callback_data:'contacts'}],[{text:lang==='ru'?'🌐 Сменить язык':'🌐 Change language',callback_data:'lang'}]]}};}
-function langMenu() { /* ... (без изменений) ... */ return {reply_markup:{inline_keyboard:[[{text:'Русский',callback_data:'setlang_ru'},{text:'English',callback_data:'setlang_en'}]]}};}
-function servicesMenu(lang) { /* ... (без изменений) ... */ return {reply_markup:{inline_keyboard:SERVICES[lang].map((s,i)=>([{text:s,callback_data:`service_${i}`}])) .concat([[{text:lang==='ru'?'⬅️ Назад':'⬅️ Back',callback_data:'menu'}]])}};}
-function citiesMenu(lang) { /* ... (без изменений) ... */ return {reply_markup:{inline_keyboard:CITIES[lang].map((c,i)=>([{text:c,callback_data:`city_${i}`}])) .concat([[{text:lang==='ru'?'⬅️ Назад':'⬅️ Back',callback_data:'service'}]])}};}
-function faqMenu(lang) { /* ... (без изменений) ... */ return {reply_markup:{inline_keyboard:FAQ[lang].map((f,i)=>([{text:f.q,callback_data:`faq_${i}`}])) .concat([[{text:lang==='ru'?'⬅️ Назад':'⬅️ Back',callback_data:'menu'}]])}};}
-function getGreeting(lang) { /* ... (без изменений) ... */ return lang==='ru'?'Привет! 👋\nЯ — бот сайта MIMIMI TATTOO. Здесь вы можете записаться к Kris на тату, пирсинг или перманент, а также узнать ответы на частые вопросы.\n\nПожалуйста, выберите действие:':'Hello! 👋\nI’m the MIMIMI TATTOO website bot. Here you can book an appointment with Kris for a tattoo, piercing, or permanent makeup, and get answers to common questions.\n\nPlease choose an option:';}
-function getFarewell(lang) { /* ... (без изменений) ... */ return lang==='ru'?'Спасибо, что выбрали MIMIMI TATTOO. Если нужна дополнительная помощь — просто напишите сюда, я всегда на связи! Хорошего дня! 🌸':'Thank you for choosing MIMIMI TATTOO. If you need more help, just write here — I’m always in touch! Have a great day! 🌸';}
 
+function mainMenu(lang) {
+  return {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: lang === 'ru' ? '📝 Записаться к Kris' : '📝 Book an appointment', callback_data: 'book' }],
+        [{ text: lang === 'ru' ? '❓ Частые вопросы' : '❓ FAQ', callback_data: 'faq' }],
+        [{ text: lang === 'ru' ? '📞 Контакты' : '📞 Contacts', callback_data: 'contacts' }],
+        [{ text: lang === 'ru' ? '🌐 Сменить язык' : '🌐 Change language', callback_data: 'lang' }]
+      ]
+    }
+  };
+}
+
+function langMenu() {
+  return {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: 'Русский', callback_data: 'setlang_ru' }, { text: 'English', callback_data: 'setlang_en' }]
+      ]
+    }
+  };
+}
+
+function servicesMenu(lang) {
+  return {
+    reply_markup: {
+      inline_keyboard: SERVICES[lang].map((s, i) => [{ text: s, callback_data: `service_${i}` }])
+        .concat([[{ text: lang === 'ru' ? '⬅️ Назад' : '⬅️ Back', callback_data: 'menu' }]])
+    }
+  };
+}
+
+function citiesMenu(lang) {
+  return {
+    reply_markup: {
+      inline_keyboard: CITIES[lang].map((c, i) => [{ text: c, callback_data: `city_${i}` }])
+        .concat([[{ text: lang === 'ru' ? '⬅️ Назад' : '⬅️ Back', callback_data: 'service' }]])
+    }
+  };
+}
+
+function faqMenu(lang) {
+  return {
+    reply_markup: {
+      inline_keyboard: FAQ[lang].map((f, i) => [{ text: f.q, callback_data: `faq_${i}` }])
+        .concat([[{ text: lang === 'ru' ? '⬅️ Назад' : '⬅️ Back', callback_data: 'menu' }]])
+    }
+  };
+}
+
+function getGreeting(lang) {
+  return lang === 'ru'
+    ? 'Привет! 👋\nЯ — бот сайта MIMIMI TATTOO. Здесь вы можете записаться к Kris на тату, пирсинг или перманент, а также узнать ответы на частые вопросы.\n\nПожалуйста, выберите действие:'
+    : 'Hello! 👋\nI’m the MIMIMI TATTOO website bot. Here you can book an appointment with Kris for a tattoo, piercing, or permanent makeup, and get answers to common questions.\n\nPlease choose an option:';
+}
+
+function getFarewell(lang) {
+  return lang === 'ru'
+    ? 'Спасибо, что выбрали MIMIMI TATTOO. Если нужна дополнительная помощь — просто напишите сюда, я всегда на связи! Хорошего дня! 🌸'
+    : 'Thank you for choosing MIMIMI TATTOO. If you need more help, just write here — I’m always in touch! Have a great day! 🌸';
+}
+
+// Сбросить пользователя в главное меню
 function resetUser(chatId) {
   users[chatId] = { lang: users[chatId]?.lang || 'ru', step: 'menu' };
 }
 
-// ГЛАВНАЯ ФУНКЦИЯ ОБРАБОТКИ СООБЩЕНИЙ
-async function processMessage(updateData, ioInstance) { // ioInstance теперь отдельный аргумент
+
+// === ГЛАВНАЯ ФУНКЦИЯ ОБРАБОТКИ СООБЩЕНИЙ ===
+// Эта функция будет вызываться как для Telegram, так и для веб-виджета.
+// Она принимает объект 'updateData' (либо от Telegram, либо от веб-виджета)
+// и ioInstance (только если источник 'web' и нужно общаться по Socket.IO)
+async function processMessage(updateData, ioInstance) {
   let chatId, text, data, source, queryId, messageId, message;
 
   // Определяем источник и извлекаем данные
-  if (updateData.source === 'web') {
+  if (updateData.source === 'web') { // Сообщение с веб-виджета
     source = 'web';
-    chatId = updateData.chatId;
-    text = updateData.text;
-    data = updateData.data;
-    message = { chat: { id: chatId }, message_id: 'web_msg_' + Date.now() }; // Mock message object
-  } else { // Telegram update
+    chatId = updateData.chatId; // socket.id
+    text = updateData.message; // В веб-сообщении текст приходит как 'message'
+    data = updateData.isCallback ? updateData.message : null; // isCallback: true означает, что message - это callback_data
+    message = { chat: { id: chatId }, message_id: 'web_msg_' + Date.now() }; // Создаем mock-объект сообщения
+  } else { // Сообщение от Telegram (webhook update)
     source = 'telegram';
     if (updateData.message) {
       message = updateData.message;
@@ -166,76 +237,137 @@ async function processMessage(updateData, ioInstance) { // ioInstance тепер
       message = updateData.callback_query.message;
       chatId = message.chat.id;
       data = updateData.callback_query.data;
-      queryId = updateData.callback_query.id;
-      text = null;
+      queryId = updateData.callback_query.id; // Для answerCallbackQuery
+      text = null; // Callback-запросы не имеют текстового сообщения
     } else {
-      console.warn('Unknown update type from Telegram:', updateData);
-      return;
+        console.warn('Unknown update type from Telegram:', updateData);
+        return;
     }
   }
 
   users[chatId] = users[chatId] || { lang: 'ru', step: 'menu' };
   const lang = users[chatId].lang;
-  const currentStep = users[chatId].step;
+  const currentStep = users[chatId].step; // Сохраняем текущий шаг пользователя
 
   try {
+    // Если это callback_query или сообщение, которое надо обработать как callback
     if (data) {
+      // Смена языка
       if (data === 'lang') {
         users[chatId].step = 'lang';
-        return await editMessageToClient(chatId, message.message_id, lang === 'ru' ? 'Пожалуйста, выберите язык:' : 'Please choose your language:', langMenu(), source, ioInstance);
+        return await editMessageToClient(
+          chatId,
+          message.message_id,
+          lang === 'ru' ? 'Пожалуйста, выберите язык:' : 'Please choose your language:',
+          langMenu(),
+          source,
+          ioInstance
+        );
       }
       if (data.startsWith('setlang_')) {
         const newLang = data.split('_')[1];
         users[chatId].lang = newLang;
-        resetUser(chatId);
-        return await editMessageToClient(chatId, message.message_id, getGreeting(newLang), mainMenu(newLang), source, ioInstance);
+        resetUser(chatId); // Сброс состояния после смены языка
+        return await editMessageToClient(
+          chatId,
+          message.message_id,
+          getGreeting(newLang),
+          mainMenu(newLang),
+          source,
+          ioInstance
+        );
       }
+
+      // Главное меню
       if (data === 'menu') {
         resetUser(chatId);
-        return await editMessageToClient(chatId, message.message_id, getGreeting(lang), mainMenu(lang), source, ioInstance);
+        return await editMessageToClient(
+          chatId,
+          message.message_id,
+          getGreeting(lang),
+          mainMenu(lang),
+          source,
+          ioInstance
+        );
       }
+
+      // Запись на услугу
       if (data === 'book') {
         users[chatId].step = 'service';
-        return await editMessageToClient(chatId, message.message_id, lang === 'ru' ? 'Выберите услугу:' : 'Choose a service:', servicesMenu(lang), source, ioInstance);
+        return await editMessageToClient(
+          chatId,
+          message.message_id,
+          lang === 'ru' ? 'Выберите услугу:' : 'Choose a service:',
+          servicesMenu(lang),
+          source,
+          ioInstance
+        );
       }
       if (data.startsWith('service_')) {
         const idx = Number(data.split('_')[1]);
         users[chatId].service = SERVICES[lang][idx];
         users[chatId].step = 'name';
+        // Для веб-виджета, мы не можем удалить сообщение бота, просто отправляем следующий запрос
         if (source === 'web') {
             await sendMessageToClient(chatId, lang === 'ru' ? 'Как вас зовут?' : 'What is your name?', {}, source, ioInstance);
         } else {
-            await deleteMessageClient(chatId, message.message_id, source, ioInstance);
+            await deleteMessageClient(chatId, message.message_id, source, ioInstance); // Удаляем предыдущие кнопки в Telegram
             await sendMessageToClient(chatId, lang === 'ru' ? 'Как вас зовут?' : 'What is your name?', {}, source, ioInstance);
         }
         return;
       }
+
+      // FAQ
       if (data === 'faq') {
-        users[chatId].step = 'faq_list';
-        return await editMessageToClient(chatId, message.message_id, lang === 'ru' ? 'Выберите вопрос:' : 'Choose a question:', faqMenu(lang), source, ioInstance);
+        users[chatId].step = 'faq_list'; // Новое состояние для списка FAQ
+        return await editMessageToClient(
+          chatId,
+          message.message_id,
+          lang === 'ru' ? 'Выберите вопрос:' : 'Choose a question:',
+          faqMenu(lang),
+          source,
+          ioInstance
+        );
       }
       if (data.startsWith('faq_')) {
         const idx = Number(data.split('_')[1]);
         const answer = FAQ[lang][idx].a;
         if (source === 'telegram') {
-            if (answer.length < 180) {
-                await answerCallbackQueryClient(queryId, { text: answer, show_alert: true }, source);
-            } else {
-                await answerCallbackQueryClient(queryId, {}, source);
-                await sendMessageToClient(chatId, answer, {}, source);
+            try {
+                // Telegram's limit for inline query answer is ~200 chars for show_alert
+                if (answer.length < 180) {
+                    await answerCallbackQueryClient(queryId, { text: answer, show_alert: true }, source);
+                } else {
+                    await answerCallbackQueryClient(queryId, {}, source); // просто закрыть alert
+                    await sendMessageToClient(chatId, answer, {}, source);
+                }
+            } catch (err) {
+                console.error('answerCallbackQuery error (telegram):', err);
             }
         } else if (source === 'web') {
+            // Для веб-виджета, мы не используем answerCallbackQuery, а просто добавляем сообщение
             await sendMessageToClient(chatId, answer, {}, source, ioInstance);
-            // Если show_alert было бы true, можно было бы сделать всплывающее окно на фронтенде
-            if (FAQ[lang][idx].a.length < 180) {
-                ioInstance.to(chatId).emit('showAlert', { text: answer, chat_id: chatId }); // Передаем chat_id для showAlert
+            if (FAQ[lang][idx].a.length < 180) { // Имитация show_alert для веб
+                // ioInstance.to(chatId).emit('showAlert', { text: answer, chat_id: chatId }); // Активировать, если нужно всплывающее окно на фронтенде
             }
         }
-        return;
+        return; // Не возвращаемся в меню после ответа на FAQ
       }
+
+      // Контакты
       if (data === 'contacts') {
-        return await editMessageToClient(chatId, message.message_id, CONTACTS[lang], mainMenu(lang), source, ioInstance);
+        // Мы не меняем шаг, просто отправляем контакты и держим пользователя в 'menu' или 'faq_list'
+        return await editMessageToClient(
+          chatId,
+          message.message_id,
+          CONTACTS[lang],
+          mainMenu(lang),
+          source,
+          ioInstance
+        );
       }
+
+      // Город
       if (data.startsWith('city_')) {
         const idx = Number(data.split('_')[1]);
         if (CITIES[lang][idx] === (lang === 'ru' ? 'Другое' : 'Other')) {
@@ -253,31 +385,41 @@ async function processMessage(updateData, ioInstance) { // ioInstance тепер
       }
     }
 
+    // Если это текстовое сообщение (msg.text)
     if (text) {
+        // Обработка /start и /menu (для веб-виджета также, если пользователь введет /start)
         if (text === '/start' || text === '/menu') {
             resetUser(chatId);
             return await sendMessageToClient(chatId, getGreeting(lang), mainMenu(lang), source, ioInstance);
         }
-        if (currentStep === 'name') {
+
+        // Имя
+        if (currentStep === 'name') { // Используем сохраненный шаг
             users[chatId].name = text;
             users[chatId].step = 'phone';
             return await sendMessageToClient(chatId, lang === 'ru' ? 'Ваш номер телефона?' : 'Your phone number?', {}, source, ioInstance);
         }
-        if (currentStep === 'phone') {
+
+        // Телефон
+        if (currentStep === 'phone') { // Используем сохраненный шаг
             users[chatId].phone = text;
             users[chatId].step = 'city';
             return await sendMessageToClient(chatId, lang === 'ru' ? 'Выберите город:' : 'Choose a city:', citiesMenu(lang), source, ioInstance);
         }
-        if (currentStep === 'city_other') {
+
+        // Город (ручной ввод)
+        if (currentStep === 'city_other') { // Используем сохраненный шаг
             users[chatId].city = text;
             users[chatId].step = 'date';
             return await sendMessageToClient(chatId, lang === 'ru'
                 ? 'Когда вам удобно прийти? (Напишите дату и время или пожелания)'
                 : 'When would you like to come? (Please write date and time or your wishes)', {}, source, ioInstance);
         }
-        if (currentStep === 'date') {
+
+        // Дата/время
+        if (currentStep === 'date') { // Используем сохраненный шаг
             users[chatId].date = text;
-            users[chatId].step = 'menu';
+            users[chatId].step = 'menu'; // Сброс в главное меню после завершения
             
             const notify =
                 (lang === 'ru' ? '✨ Новая заявка!\n' : '✨ New request!\n') +

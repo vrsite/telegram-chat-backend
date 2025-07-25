@@ -5,9 +5,9 @@ const axios = require('axios');
 const token = process.env.TELEGRAM_BOT_TOKEN;
 const adminChatId = process.env.TELEGRAM_CHAT_ID;
 
-const bot = new TelegramBot(token); // Убедитесь, что здесь нет { polling: true }
+const bot = new TelegramBot(token);
 
-const users = {}; // Состояния пользователей, теперь ключом может быть Telegram chatId или socket.id
+const users = {};
 
 const LANGS = [
   { code: 'ru', label: 'Русский' },
@@ -66,12 +66,10 @@ Email: nika889list.ru@gmail.com
 Phones: +380 96 515 78 90 (UA), +353 87 716 79 33 (IRL)`
 };
 
-// Отправка сообщения обратно клиенту (Telegram или Web)
 async function sendMessageToClient(chatId, text, options = {}, source, ioInstance) {
   if (source === 'web') {
-    await new Promise(resolve => setTimeout(resolve, 100)); // 100ms задержка
+    await new Promise(resolve => setTimeout(resolve, 100));
     if (ioInstance) {
-      console.log(`[BOT-SEND] Sending to web socket ${chatId}: ${text}`); // Логирование отправки на веб
       ioInstance.to(chatId).emit('botMessage', {
         text: text,
         buttons: options.reply_markup ? options.reply_markup.inline_keyboard : []
@@ -79,9 +77,8 @@ async function sendMessageToClient(chatId, text, options = {}, source, ioInstanc
     } else {
       console.error('[BOT-ERROR] Socket.IO instance not provided for web message. Cannot send to socket.');
     }
-  } else { // source === 'telegram'
+  } else {
     try {
-      console.log(`[BOT-SEND] Sending to Telegram chat ${chatId}: ${text}`); // Логирование отправки в ТГ
       await bot.sendMessage(chatId, text, options);
     } catch (error) {
       console.error(`[BOT-ERROR] Error sending message to Telegram chat ${chatId}:`, error);
@@ -89,23 +86,19 @@ async function sendMessageToClient(chatId, text, options = {}, source, ioInstanc
   }
 }
 
-// Отправка отредактированного сообщения обратно клиенту (Telegram или Web)
 async function editMessageToClient(chatId, messageId, text, options = {}, source, ioInstance) {
   if (source === 'web') {
     await new Promise(resolve => setTimeout(resolve, 100));
     if (ioInstance) {
-      console.log(`[BOT-EDIT] Sending edited message to web socket ${chatId}: ${text}`); // Логирование отправки edit
-      ioInstance.to(chatId).emit('botMessage', { // Для веб-виджета, отправляем новое сообщение вместо редактирования
+      ioInstance.to(chatId).emit('botMessage', {
         text: text,
         buttons: options.reply_markup ? options.reply_markup.inline_keyboard : []
       });
-      // ioInstance.to(chatId).emit('clearLastButtons'); // Команда фронтенду для очистки предыдущих кнопок - ЭТУ СТРОКУ НУЖНО ЗАКОММЕНТИРОВАТЬ ИЛИ УДАЛИТЬ!
     } else {
       console.error('[BOT-ERROR] Socket.IO instance not provided for web message edit. Cannot send to socket.');
     }
-  } else { // source === 'telegram'
+  } else {
     try {
-      console.log(`[BOT-EDIT] Editing Telegram message ${messageId} in chat ${chatId}: ${text}`); // Логирование редактирования в ТГ
       await bot.editMessageText(text, { chat_id: chatId, message_id: messageId, ...options });
     } catch (error) {
       console.error(`[BOT-ERROR] Error editing message in Telegram chat ${chatId}:`, error);
@@ -113,18 +106,15 @@ async function editMessageToClient(chatId, messageId, text, options = {}, source
   }
 }
 
-// Отправка alert-уведомления клиенту (только Telegram, для web - эмулируем)
 async function answerCallbackQueryClient(queryId, options = {}, source, ioInstance) {
   if (source === 'web') {
-    if (options.show_alert && ioInstance && options.text && options.chat_id) { // Убедимся, что text и chat_id в options есть
-        console.log(`[BOT-ALERT] Sending alert to web socket ${options.chat_id}: ${options.text}`); // Логирование alert
+    if (options.show_alert && ioInstance && options.text && options.chat_id) {
         ioInstance.to(options.chat_id).emit('showAlert', { text: options.text });
     } else {
         console.warn('[BOT-WARN] showAlert called for web without necessary options or ioInstance.');
     }
-  } else { // source === 'telegram'
+  } else {
     try {
-      console.log(`[BOT-ALERT] Answering callback query ${queryId} in Telegram.`); // Логирование ответа на callback
       await bot.answerCallbackQuery(queryId, options);
     } catch (error) {
       console.error(`[BOT-ERROR] Error answering callback query ${queryId} in Telegram:`, error);
@@ -132,18 +122,15 @@ async function answerCallbackQueryClient(queryId, options = {}, source, ioInstan
   }
 }
 
-// Удаление сообщения (только Telegram, для web - эмулируем)
 async function deleteMessageClient(chatId, messageId, source, ioInstance) {
   if (source === 'web') {
     if (ioInstance) {
-      console.log(`[BOT-DELETE] Clearing buttons for web socket ${chatId}.`); // Логирование очистки
-      ioInstance.to(chatId).emit('clearLastButtons'); // Команда фронтенду для очистки кнопок
+      ioInstance.to(chatId).emit('clearLastButtons');
     } else {
       console.error('[BOT-ERROR] Socket.IO instance not provided for web message delete. Cannot clear buttons.');
     }
-  } else { // source === 'telegram'
+  } else {
     try {
-      console.log(`[BOT-DELETE] Deleting Telegram message ${messageId} in chat ${chatId}.`); // Логирование удаления
       await bot.deleteMessage(chatId, messageId);
     } catch (error) {
       console.error(`[BOT-ERROR] Error deleting message in Telegram chat ${chatId}:`, error);
@@ -152,20 +139,27 @@ async function deleteMessageClient(chatId, messageId, source, ioInstance) {
 }
 
 
-function mainMenu(lang) {
+function mainMenu(lang, source) {
+  const bookText = lang === 'ru' ? 'Записаться к Kris' : 'Book an appointment';
+  const faqText = lang === 'ru' ? 'Частые вопросы' : 'FAQ';
+  const contactsText = lang === 'ru' ? 'Контакты' : 'Contacts';
+  const langText = lang === 'ru' ? 'Сменить язык' : 'Change language';
+
+  const addEmoji = (source !== 'web'); 
+
   return {
     reply_markup: {
       inline_keyboard: [
-        [{ text: lang === 'ru' ? '📝 Записаться к Kris' : '📝 Book an appointment', callback_data: 'book' }],
-        [{ text: lang === 'ru' ? '❓ Частые вопросы' : '❓ FAQ', callback_data: 'faq' }],
-        [{ text: lang === 'ru' ? '📞 Контакты' : '📞 Contacts', callback_data: 'contacts' }],
-        [{ text: lang === 'ru' ? '🌐 Сменить язык' : '🌐 Change language', callback_data: 'lang' }]
+        [{ text: addEmoji ? `📝 ${bookText}` : bookText, callback_data: 'book' }],
+        [{ text: addEmoji ? `❓ ${faqText}` : faqText, callback_data: 'faq' }],
+        [{ text: addEmoji ? `📞 ${contactsText}` : contactsText, callback_data: 'contacts' }],
+        [{ text: addEmoji ? `🌐 ${langText}` : langText, callback_data: 'lang' }]
       ]
     }
   };
 }
 
-function langMenu() {
+function langMenu(source) {
   return {
     reply_markup: {
       inline_keyboard: [
@@ -175,29 +169,38 @@ function langMenu() {
   };
 }
 
-function servicesMenu(lang) {
+function servicesMenu(lang, source) {
+  const backText = lang === 'ru' ? 'Назад' : 'Back';
+  const addEmoji = (source !== 'web');
+
   return {
     reply_markup: {
       inline_keyboard: SERVICES[lang].map((s, i) => [{ text: s, callback_data: `service_${i}` }])
-        .concat([[{ text: lang === 'ru' ? '⬅️ Назад' : '⬅️ Back', callback_data: 'menu' }]])
+        .concat([[{ text: addEmoji ? `⬅️ ${backText}` : backText, callback_data: 'menu' }]])
     }
   };
 }
 
-function citiesMenu(lang) {
+function citiesMenu(lang, source) {
+  const backText = lang === 'ru' ? 'Назад' : 'Back';
+  const addEmoji = (source !== 'web');
+
   return {
     reply_markup: {
       inline_keyboard: CITIES[lang].map((c, i) => [{ text: c, callback_data: `city_${i}` }])
-        .concat([[{ text: lang === 'ru' ? '⬅️ Назад' : '⬅️ Back', callback_data: 'service' }]])
+        .concat([[{ text: addEmoji ? `⬅️ ${backText}` : backText, callback_data: 'service' }]])
     }
   };
 }
 
-function faqMenu(lang) {
+function faqMenu(lang, source) {
+  const backText = lang === 'ru' ? 'Назад' : 'Back';
+  const addEmoji = (source !== 'web');
+
   return {
     reply_markup: {
       inline_keyboard: FAQ[lang].map((f, i) => [{ text: f.q, callback_data: `faq_${i}` }])
-        .concat([[{ text: lang === 'ru' ? '⬅️ Назад' : '⬅️ Back', callback_data: 'menu' }]])
+        .concat([[{ text: addEmoji ? `⬅️ ${backText}` : backText, callback_data: 'menu' }]])
     }
   };
 }
@@ -214,28 +217,21 @@ function getFarewell(lang) {
     : 'Thank you for choosing MIMIMI TATTOO. If you need more help, just write here — I’m always in touch! Have a great day! 🌸';
 }
 
-// Сбросить пользователя в главное меню
 function resetUser(chatId) {
   users[chatId] = { lang: users[chatId]?.lang || 'ru', step: 'menu' };
-  console.log(`[BOT-STATE] User ${chatId} reset to menu state.`); // Логирование сброса состояния
 }
 
-
-// === ГЛАВНАЯ ФУНКЦИЯ ОБРАБОТКИ СООБЩЕНИЙ ===
-// Эта функция будет вызываться как для Telegram, так и для веб-виджета.
-// Она принимает объект 'updateData' (либо от Telegram, либо от веб-виджета)
-// и ioInstance (только если источник 'web' и нужно общаться по Socket.IO)
 async function processMessage(updateData, ioInstance) {
   let chatId, text, data, source, queryId, message;
 
   source = updateData.source;
 
   if (source === 'web') {
-    chatId = updateData.chatId; // socket.id
+    chatId = updateData.chatId;
     text = updateData.message;
     data = updateData.isCallback ? updateData.message : null;
-    message = { chat: { id: chatId }, message_id: 'web_msg_' + Date.now() }; // Mock message object for web
-  } else { // source === 'telegram'
+    message = { chat: { id: chatId }, message_id: 'web_msg_' + Date.now() };
+  } else {
     if (updateData.message) {
       message = updateData.message;
       chatId = message.chat.id;
@@ -254,34 +250,31 @@ async function processMessage(updateData, ioInstance) {
     }
   }
   
-  // Инициализация или получение состояния пользователя
   if (!users[chatId]) {
-      users[chatId] = { lang: 'ru', step: 'menu' }; // Установка начального языка и шага
+      users[chatId] = { lang: 'ru', step: 'menu' };
   }
   const lang = users[chatId].lang;
   const currentStep = users[chatId].step;
 
-  console.log(`[BOT-PROCESS] Chat ${chatId} (${source}) - Step: ${currentStep}, Text: "${text}", Data: "${data}"`); // Детальное логирование процесса
-
   try {
-    if (data) { // Handle callback_query or callback-like data
+    if (data) {
       if (data === 'lang') {
         users[chatId].step = 'lang';
-        return await editMessageToClient(chatId, message.message_id, lang === 'ru' ? 'Пожалуйста, выберите язык:' : 'Please choose your language:', langMenu(), source, ioInstance);
+        return await editMessageToClient(chatId, message.message_id, lang === 'ru' ? 'Пожалуйста, выберите язык:' : 'Please choose your language:', langMenu(source), source, ioInstance);
       }
       if (data.startsWith('setlang_')) {
         const newLang = data.split('_')[1];
         users[chatId].lang = newLang;
         resetUser(chatId);
-        return await editMessageToClient(chatId, message.message_id, getGreeting(newLang), mainMenu(newLang), source, ioInstance);
+        return await editMessageToClient(chatId, message.message_id, getGreeting(newLang), mainMenu(newLang, source), source, ioInstance);
       }
       if (data === 'menu') {
         resetUser(chatId);
-        return await editMessageToClient(chatId, message.message_id, getGreeting(lang), mainMenu(lang), source, ioInstance);
+        return await editMessageToClient(chatId, message.message_id, getGreeting(lang), mainMenu(lang, source), source, ioInstance);
       }
       if (data === 'book') {
         users[chatId].step = 'service';
-        return await editMessageToClient(chatId, message.message_id, lang === 'ru' ? 'Выберите услугу:' : 'Choose a service:', servicesMenu(lang), source, ioInstance);
+        return await editMessageToClient(chatId, message.message_id, lang === 'ru' ? 'Выберите услугу:' : 'Choose a service:', servicesMenu(lang, source), source, ioInstance);
       }
       if (data.startsWith('service_')) {
         const idx = Number(data.split('_')[1]);
@@ -297,28 +290,29 @@ async function processMessage(updateData, ioInstance) {
       }
       if (data === 'faq') {
         users[chatId].step = 'faq_list';
-        return await editMessageToClient(chatId, message.message_id, lang === 'ru' ? 'Выберите вопрос:' : 'Choose a question:', faqMenu(lang), source, ioInstance);
+        return await editMessageToClient(chatId, message.message_id, lang === 'ru' ? 'Выберите вопрос:' : 'Choose a question:', faqMenu(lang, source), source, ioInstance);
       }
       if (data.startsWith('faq_')) {
         const idx = Number(data.split('_')[1]);
         const answer = FAQ[lang][idx].a;
+        
         if (source === 'telegram') {
             if (answer.length < 180) {
-                await answerCallbackQueryClient(queryId, { text: answer, show_alert: true }, source, ioInstance); // queryId для ТГ
+                await answerCallbackQueryClient(queryId, { text: answer, show_alert: true }, source, ioInstance);
+                await sendMessageToClient(chatId, answer, {}, source, ioInstance);
             } else {
                 await answerCallbackQueryClient(queryId, {}, source, ioInstance);
                 await sendMessageToClient(chatId, answer, {}, source, ioInstance);
             }
+            await sendMessageToClient(chatId, lang === 'ru' ? 'Выберите другой вопрос или вернитесь в главное меню:' : 'Choose another question or return to the main menu:', faqMenu(lang, source), source, ioInstance);
         } else if (source === 'web') {
             await sendMessageToClient(chatId, answer, {}, source, ioInstance);
-            if (FAQ[lang][idx].a.length < 180) {
-                // ioInstance.to(chatId).emit('showAlert', { text: answer }); // Активировать, если нужно всплывающее окно на фронтенде
-            }
+            await sendMessageToClient(chatId, lang === 'ru' ? 'Выберите другой вопрос или вернитесь в главное меню:' : 'Choose another question or return to the main menu:', faqMenu(lang, source), source, ioInstance);
         }
         return;
       }
       if (data === 'contacts') {
-        return await editMessageToClient(chatId, message.message_id, CONTACTS[lang], mainMenu(lang), source, ioInstance);
+        return await editMessageToClient(chatId, message.message_id, CONTACTS[lang], mainMenu(lang, source), source, ioInstance);
       }
       if (data.startsWith('city_')) {
         const idx = Number(data.split('_')[1]);
@@ -337,10 +331,10 @@ async function processMessage(updateData, ioInstance) {
       }
     }
 
-    if (text) { // Handle text messages
+    if (text) {
         if (text === '/start' || text === '/menu') {
             resetUser(chatId);
-            return await sendMessageToClient(chatId, getGreeting(lang), mainMenu(lang), source, ioInstance);
+            return await sendMessageToClient(chatId, getGreeting(lang), mainMenu(lang, source), source, ioInstance);
         }
         if (currentStep === 'name') {
             users[chatId].name = text;
@@ -350,7 +344,7 @@ async function processMessage(updateData, ioInstance) {
         if (currentStep === 'phone') {
             users[chatId].phone = text;
             users[chatId].step = 'city';
-            return await sendMessageToClient(chatId, lang === 'ru' ? 'Выберите город:' : 'Choose a city:', citiesMenu(lang), source, ioInstance);
+            return await sendMessageToClient(chatId, lang === 'ru' ? 'Выберите город:' : 'Choose a city:', citiesMenu(lang, source), source, ioInstance);
         }
         if (currentStep === 'city_other') {
             users[chatId].city = text;
@@ -383,7 +377,7 @@ async function processMessage(updateData, ioInstance) {
                     ? 'Спасибо за заявку! Kris свяжется с вами для уточнения деталей. Важно: для подтверждения записи потребуется предоплата.\n\n'
                     : 'Thank you for your request! Kris will contact you to confirm the details. Note: a prepayment is required to confirm your booking.\n\n'
                 ) + getFarewell(lang),
-                mainMenu(lang),
+                mainMenu(lang, source),
                 source,
                 ioInstance
             );
@@ -396,15 +390,9 @@ async function processMessage(updateData, ioInstance) {
   }
 }
 
-// ЭКСПОРТИРУЕМ ФУНКЦИИ
 module.exports = {
-  // handleTelegramUpdate теперь принимает raw updateBody
   handleTelegramUpdate: async (updateBody, ioInstance) => {
-    // Просто передаем raw updateBody в processMessage.
-    // processMessage сам определит, это message или callback_query.
-    // Важно: ioInstance здесь нужен, если Telegram-бот отправляет сообщение на веб-виджет
-    // (например, при ответе администратора в Telegram на заявку с сайта).
     await processMessage({ ...updateBody, source: 'telegram' }, ioInstance);
   },
-  processMessage: processMessage // Для приема сообщений с веб-виджета
+  processMessage: processMessage
 };

@@ -99,7 +99,7 @@ async function editMessageToClient(chatId, messageId, text, options = {}, source
         text: text,
         buttons: options.reply_markup ? options.reply_markup.inline_keyboard : []
       });
-      ioInstance.to(chatId).emit('clearLastButtons'); // Команда фронтенду для очистки предыдущих кнопок
+      // ioInstance.to(chatId).emit('clearLastButtons'); // Команда фронтенду для очистки предыдущих кнопок - ЭТУ СТРОКУ НУЖНО ЗАКОММЕНТИРОВАТЬ ИЛИ УДАЛИТЬ!
     } else {
       console.error('[BOT-ERROR] Socket.IO instance not provided for web message edit. Cannot send to socket.');
     }

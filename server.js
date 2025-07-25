@@ -1,11 +1,11 @@
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
-const http = require('http'); // Добавлено для создания HTTP сервера
-const { Server } = require('socket.io'); // Добавлено для Socket.IO
+const http = require('http');
+const { Server } = require('socket.io');
 
 const app = express();
-const server = http.createServer(app); // Создаем HTTP сервер из Express приложения
+const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: "*", // Разрешаем подключение с любого домена (для разработки). В продакшене лучше указать домен вашего сайта.
@@ -16,7 +16,6 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 
-// Переносим импорт логики бота сюда, чтобы передать ей io объект
 const botLogic = require('./bot');
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -25,6 +24,7 @@ const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 // Маршрут для Webhook от Telegram
 app.post('/telegram-webhook', (req, res) => {
   // Передаем io в handleTelegramUpdate, чтобы бот мог отправлять сообщения на веб-виджет
+  console.log('Telegram Webhook received:', JSON.stringify(req.body, null, 2)); // Логируем входящий Webhook
   botLogic.handleTelegramUpdate(req.body, io);
   res.sendStatus(200); // Telegram ожидает 200 OK
 });
@@ -39,12 +39,12 @@ io.on('connection', (socket) => {
   console.log('Пользователь подключился к веб-сокету:', socket.id);
 
   socket.on('webMessage', (data) => {
-    console.log('Сообщение с веб-виджета:', data);
+    console.log(`Сообщение с веб-виджета (${socket.id}):`, data); // Логируем socket.id
     // Передаем io как отдельный аргумент processMessage
     botLogic.processMessage({
       chatId: socket.id,
-      text: data.message,
-      data: data.isCallback ? data.message : null, // data - это callback_data, если это callback
+      message: data.message, // Переименовано для ясности (было 'text')
+      isCallback: data.isCallback, // isCallback: true означает, что message - это callback_data
       source: 'web'
     }, io); // io передается вторым аргументом
   });
@@ -56,5 +56,4 @@ io.on('connection', (socket) => {
 
 
 const PORT = process.env.PORT || 3001;
-// Используем server.listen вместо app.listen
 server.listen(PORT, () => console.log(`Server started on port ${PORT} and Socket.IO is ready`));

@@ -48,22 +48,24 @@ const FAQ = {
 };
 
 const CONTACTS = {
-  ru: `Контакты Kris:
-Telegram: @mimimitattoo
-WhatsApp UA: https://wa.me/380965157890
-WhatsApp IRL: https://wa.me/353877167933
-Instagram: https://www.instagram.com/mimimitattoo
-Facebook: https://www.facebook.com/share/16r3PEdLeh/?mibextid=wwXIfr
-Email: nika889list.ru@gmail.com
-Телефоны: +380 96 515 78 90 (UA), +353 87 716 79 33 (IRL)`,
-  en: `Kris's contacts:
-Telegram: @mimimitattoo
-WhatsApp UA: https://wa.me/380965157890
-WhatsApp IRL: https://wa.me/353877167933
-Instagram: https://www.instagram.com/mimimitattoo
-Facebook: https://www.facebook.com/share/16r3PEdLeh/?mibextid=wwXIfr
-Email: nika889list.ru@gmail.com
-Phones: +380 96 515 78 90 (UA), +353 87 716 79 33 (IRL)`
+  ru: [
+    { type: 'heading', text: 'Контакты Kris:' },
+    { type: 'link', text: 'Telegram: @mimimitattoo', url: 'https://t.me/mimimitattoo', icon: 'fab fa-telegram-plane' },
+    { type: 'link', text: 'WhatsApp UA: +380 96 515 78 90', url: 'https://wa.me/380965157890', icon: 'fab fa-whatsapp' },
+    { type: 'link', text: 'WhatsApp IRL: +353 87 716 79 33', url: 'https://wa.me/353877167933', icon: 'fab fa-whatsapp' },
+    { type: 'link', text: 'Instagram: mimimitattoo', url: 'https://www.instagram.com/mimimitattoo?utm_source=ig_web_button_share_sheet&igsh=czl6dzdlbWN5aGhj', icon: 'fab fa-instagram' },
+    { type: 'link', text: 'Facebook: mimimitattoo', url: 'https://www.facebook.com/share/16r3PEdLeh/?mibextid=wwXIfr', icon: 'fab fa-facebook' },
+    { type: 'link', text: 'Email: nika889list.ru@gmail.com', url: 'mailto:nika889list.ru@gmail.com', icon: 'fas fa-envelope' }
+  ],
+  en: [
+    { type: 'heading', text: 'Kris\'s contacts:' },
+    { type: 'link', text: 'Telegram: @mimimitattoo', url: 'https://t.me/mimimitattoo', icon: 'fab fa-telegram-plane' },
+    { type: 'link', text: 'WhatsApp UA: +380 96 515 78 90', url: 'https://wa.me/380965157890', icon: 'fab fa-whatsapp' },
+    { type: 'link', text: 'WhatsApp IRL: +353 87 716 79 33', url: 'https://wa.me/353877167933', icon: 'fab fa-whatsapp' },
+    { type: 'link', text: 'Instagram: mimimitattoo', url: 'https://www.instagram.com/mimimitattoo?utm_source=ig_web_button_share_sheet&igsh=czl6dzdlbWN5aGhj', icon: 'fab fa-instagram' },
+    { type: 'link', text: 'Facebook: mimimitattoo', url: 'https://www.facebook.com/share/16r3PEdLeh/?mibextid=wwXIfr', icon: 'fab fa-facebook' },
+    { type: 'link', text: 'Email: nika889list.ru@gmail.com', url: 'mailto:nika889list.ru@gmail.com', icon: 'fas fa-envelope' }
+  ]
 };
 
 async function sendMessageToClient(chatId, text, options = {}, source, ioInstance) {
@@ -137,7 +139,6 @@ async function deleteMessageClient(chatId, messageId, source, ioInstance) {
     }
   }
 }
-
 
 function mainMenu(lang, source) {
   const bookText = lang === 'ru' ? 'Записаться к Kris' : 'Book an appointment';
@@ -307,12 +308,33 @@ async function processMessage(updateData, ioInstance) {
             await sendMessageToClient(chatId, lang === 'ru' ? 'Выберите другой вопрос или вернитесь в главное меню:' : 'Choose another question or return to the main menu:', faqMenu(lang, source), source, ioInstance);
         } else if (source === 'web') {
             await sendMessageToClient(chatId, answer, {}, source, ioInstance);
-            await sendMessageToClient(chatId, lang === 'ru' ? 'Выберите другой вопрос или вернитесь в главное меню:' : 'Choose another question or return to the main menu:', faqMenu(lang, source), source, ioInstance);
+            await sendMessageToClient(chatId, lang === 'ru' ? 'Выберите другой вопрос или вернитесь в главное меню:' : 'Choose another question or more options:', faqMenu(lang, source), source, ioInstance);
         }
         return;
       }
       if (data === 'contacts') {
-        return await editMessageToClient(chatId, message.message_id, CONTACTS[lang], mainMenu(lang, source), source, ioInstance);
+        let contactsHtml = '';
+        const textForTelegram = [];
+        
+        CONTACTS[lang].forEach(item => {
+          if (item.type === 'heading') {
+            contactsHtml += `<strong>${item.text}</strong><br>`;
+            textForTelegram.push(item.text);
+          } else if (item.type === 'link') {
+            contactsHtml += `<a href="${item.url}" target="_blank" class="chat-contact-link">`;
+            if (source === 'web' && item.icon) {
+              contactsHtml += `<i class="${item.icon}"></i> `;
+            }
+            contactsHtml += `${item.text}</a><br>`;
+            textForTelegram.push(`${item.text} (${item.url})`);
+          }
+        });
+
+        if (source === 'web') {
+            return await editMessageToClient(chatId, message.message_id, contactsHtml, mainMenu(lang, source), source, ioInstance);
+        } else {
+            return await editMessageToClient(chatId, message.message_id, textForTelegram.join('\n'), mainMenu(lang, source), source, ioInstance);
+        }
       }
       if (data.startsWith('city_')) {
         const idx = Number(data.split('_')[1]);
@@ -369,7 +391,7 @@ async function processMessage(updateData, ioInstance) {
             try {
                 await bot.sendMessage(adminChatId, notify);
             } catch (err) {
-                console.error('[BOT-ERROR] sendMessage to admin error:', err);
+                console.error(`[BOT-ERROR] sendMessage to admin error for chat ${chatId}:`, err);
             }
 
             return await sendMessageToClient(chatId,
